@@ -75,7 +75,5 @@ schedule.every().day.at("08:30").do(send_products)
 schedule.every().day.at("13:00").do(send_products)
 schedule.every().day.at("20:00").do(send_products)
 
-# ריצה מתמשכת
-while True:
-    schedule.run_pending()
-    time.sleep(30)
+# הרצה ידנית לבדיקה
+send_products()
