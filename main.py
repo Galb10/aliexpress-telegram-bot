@@ -6,29 +6,31 @@ from telegram import Bot
 import time
 import random
 import os
+from urllib.parse import quote
 
-# הגדרות
+# הגדרות בסיס
 BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 CHAT_ID = "-1002644464460"
 AFFILIATE_NAME = "Dailyalifinds"
+SHORT_KEY = "UneMJZf"
 SENT_FILE = "sent_products.txt"
 
 bot = Bot(token=BOT_TOKEN)
 scheduler = BackgroundScheduler(timezone=timezone("Asia/Jerusalem"))
 
-# טעינת מוצרים שנשלחו
+# טוען מוצרים שכבר נשלחו
 def load_sent_products():
     if not os.path.exists(SENT_FILE):
         return set()
     with open(SENT_FILE, "r", encoding="utf-8") as f:
         return set(line.strip() for line in f.readlines())
 
-# שמירת מוצר שנשלח
+# שומר מוצר חדש שנשלח
 def save_sent_product(product_id):
     with open(SENT_FILE, "a", encoding="utf-8") as f:
         f.write(product_id + "\n")
 
-# ניסוח שיווקי
+# יוצר ניסוח בשרני להודעה
 def generate_rich_text(title, price, link):
     emojis = ["🔥", "✅", "🛒", "💡", "✨", "📦", "❤️", "⚡", "🚀", "⭐"]
     intro = random.choice([
@@ -63,7 +65,7 @@ def generate_rich_text(title, price, link):
     lines.append(f"{random.choice(emojis)} {cta}")
     return "\n".join(lines)
 
-# שליפת מחיר
+# שליפת מחיר מהמוצר
 def get_price(url):
     try:
         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -73,7 +75,7 @@ def get_price(url):
     except:
         return None
 
-# שליפת תמונה
+# שליפת תמונה תקינה
 def get_image(url):
     try:
         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -83,11 +85,12 @@ def get_image(url):
     except:
         return None
 
-# יצירת קישור שותף
+# יצירת קישור שותף עם קידוד
 def generate_affiliate_link(url):
-    return f"https://s.click.aliexpress.com/deep_link.htm?aff_short_key=UneMJZf&dl_target_url={url}&af={AFFILIATE_NAME}"
+    encoded_url = quote(url, safe='')
+    return f"https://s.click.aliexpress.com/deep_link.htm?aff_short_key={SHORT_KEY}&dl_target_url={encoded_url}&af={AFFILIATE_NAME}"
 
-# שליפת מוצרים טרנדיים חדשים
+# שליפת מוצרים טרנדיים שלא נשלחו
 def get_trending_products(limit=4):
     sent = load_sent_products()
     url = "https://www.aliexpress.com/w/wholesale-trending.html"
@@ -122,7 +125,7 @@ def get_trending_products(limit=4):
             break
     return products
 
-# שליחת מוצר לטלגרם
+# שליחת מוצר לקבוצת טלגרם
 def send_product(product):
     link = generate_affiliate_link(product["url"])
     caption = generate_rich_text(product["title"], product["price"], link)
@@ -146,7 +149,7 @@ scheduler.add_job(send_products, 'cron', hour=14)
 scheduler.add_job(send_products, 'cron', hour=20)
 scheduler.start()
 
-# בדיקה מיידית
+# שליחה מיידית לבדיקה
 send_products()
 
 while True:
