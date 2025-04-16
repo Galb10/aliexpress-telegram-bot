@@ -1,13 +1,14 @@
-import os
 import requests
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+token = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
+chat_id = "-1002644464460"
+text = "בדיקת חיבור – אם אתה רואה את זה, הבוט עובד!"
 
-def send_message(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text}
-    requests.post(url, json=payload)
+url = f"https://api.telegram.org/bot{token}/sendMessage"
+payload = {
+    "chat_id": chat_id,
+    "text": text
+}
 
-if __name__ == "__main__":
-    send_message("המערכת עלתה בהצלחה!")
+response = requests.post(url, data=payload)
+print(response.text)
