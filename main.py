@@ -16,18 +16,19 @@ SENT_FILE = "sent_products.txt"
 bot = Bot(token=BOT_TOKEN)
 scheduler = BackgroundScheduler(timezone=timezone("Asia/Jerusalem"))
 
-# טעינת מזהים שנשלחו
+# טעינת מוצרים שנשלחו
 def load_sent_products():
     if not os.path.exists(SENT_FILE):
         return set()
-    with open(SENT_FILE, "r") as f:
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
         return set(line.strip() for line in f.readlines())
 
+# שמירת מוצר שנשלח
 def save_sent_product(product_id):
-    with open(SENT_FILE, "a") as f:
+    with open(SENT_FILE, "a", encoding="utf-8") as f:
         f.write(product_id + "\n")
 
-# ניסוח הודעה עשירה
+# ניסוח שיווקי
 def generate_rich_text(title, price, link):
     emojis = ["🔥", "✅", "🛒", "💡", "✨", "📦", "❤️", "⚡", "🚀", "⭐"]
     intro = random.choice([
@@ -82,11 +83,11 @@ def get_image(url):
     except:
         return None
 
-# קישור שותף
+# יצירת קישור שותף
 def generate_affiliate_link(url):
     return f"https://s.click.aliexpress.com/deep_link.htm?aff_short_key=UneMJZf&dl_target_url={url}&af={AFFILIATE_NAME}"
 
-# שליפת מוצרים
+# שליפת מוצרים טרנדיים חדשים
 def get_trending_products(limit=4):
     sent = load_sent_products()
     url = "https://www.aliexpress.com/w/wholesale-trending.html"
@@ -100,11 +101,11 @@ def get_trending_products(limit=4):
         href = link.get("href")
         if not href.startswith("http"):
             href = "https:" + href
-        product_id = href.split("/")[-1].split(".")[0]
-        if product_id in sent:
-            continue
         title = link.get("title") or link.text.strip()
         if not title:
+            continue
+        product_id = (title.strip() + href.strip())[:150]
+        if product_id in sent:
             continue
         image = get_image(href)
         if not image:
@@ -121,7 +122,7 @@ def get_trending_products(limit=4):
             break
     return products
 
-# שליחה
+# שליחת מוצר לטלגרם
 def send_product(product):
     link = generate_affiliate_link(product["url"])
     caption = generate_rich_text(product["title"], product["price"], link)
@@ -131,6 +132,7 @@ def send_product(product):
     except Exception as e:
         print("שגיאה בשליחה:", e)
 
+# שליחת סדרת מוצרים
 def send_products():
     print("שולח מוצרים...")
     products = get_trending_products()
@@ -144,7 +146,7 @@ scheduler.add_job(send_products, 'cron', hour=14)
 scheduler.add_job(send_products, 'cron', hour=20)
 scheduler.start()
 
-# שליחה מיידית לבדיקה
+# בדיקה מיידית
 send_products()
 
 while True:
