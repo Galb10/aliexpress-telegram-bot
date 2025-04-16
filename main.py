@@ -1,4 +1,5 @@
 import requests
+import pytz
 from bs4 import BeautifulSoup
 import telegram
 from telegram.error import TelegramError
@@ -63,7 +64,7 @@ def send_products():
         print(f"שגיאה כללית: {e}")
 
 # הגדרה של תזמון
-scheduler = BackgroundScheduler()
+scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Jerusalem"))
 scheduler.add_job(send_products, 'cron', hour=9, minute=0)   # בוקר
 scheduler.add_job(send_products, 'cron', hour=14, minute=0)  # צהריים
 scheduler.add_job(send_products, 'cron', hour=20, minute=0)  # ערב
