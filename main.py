@@ -1,89 +1,81 @@
+from datetime import datetime
+from pytz import timezone
 import requests
 import random
 import time
-from bs4 import BeautifulSoup
 import schedule
+import telegram
+from bs4 import BeautifulSoup
 
-# פרטי הבוט והקבוצה
+# הגדרות
 BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 CHAT_ID = "-1002644464460"
-TRACKING_ID = "Dailyalifinds"
+AFFILIATE_NAME = "Dailyalifinds"
+PRODUCTS_PER_BATCH = 4
 
-# טקסטים שיווקיים לפי קטגוריה
-TEMPLATES = {
+bot = telegram.Bot(token=BOT_TOKEN)
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+TEXT_BANK = {
     "default": [
-        "למה לא היה לי את זה קודם?",
-        "מוצר חובה בכל בית!",
-        "יאללה לעגלה!",
-        "תודו לי אחר כך",
-        "בקטע מוגזם – שווה כל שקל",
-        "חובה אצל כל אחד!"
-    ],
-    "kitchen": [
-        "הסוד של כל שף ביתי",
-        "העוזר הקטן שאתה צריך במטבח",
-        "בלי זה – אל תיכנס למטבח"
-    ],
-    "tech": [
-        "גאדג'ט חכם במחיר מגוחך",
-        "למה לשלם כפול בארץ?",
-        "כל חובב טכנולוגיה חייב את זה"
+        "למה לא היה לי את זה קודם?! תראו איזה דבר",
+        "תודו שזה גאוני... חייב בכל בית",
+        "המצאה של החיים, כל יום שולחים לי על זה שאלה",
+        "כל פעם שאני משתמש בזה שואלים אותי מאיפה קניתי",
+        "אם אתם לא עם זה - אתם לא בעניינים",
     ]
 }
 
-# שליחת מוצר לטלגרם
-def send_product(title, image_url, price, product_url, category="default"):
-    caption = f"{random.choice(TEMPLATES.get(category, TEMPLATES['default']))}\n\n{title}\nרק ב־{price}₪\n{product_url}"
-    requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
-        data={"chat_id": CHAT_ID, "caption": caption, "photo": image_url}
-    )
-
-# שליפת מוצרים מאלי אקספרס (דילים חמים)
 def get_trending_products():
-    url = "https://www.aliexpress.com/gcp/flashdeals/featured"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers)
+    url = "https://www.aliexpress.com/w/wholesale-trending.html"
+    res = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(res.text, "html.parser")
+    items = soup.select("a[href*='item']")
 
-    items = []
-    for item in soup.select("a.flash-sale-item-card"):
-        try:
-            title = item.select_one(".title--wrap--Ms9Zv").text.strip()
-            image = item.find("img")["src"]
-            price = item.select_one(".uniform-banner-box-price").text.replace("US $", "").strip()
-            link = "https:" + item["href"]
-            affiliate_link = f"https://s.click.aliexpress.com/deep_link.htm?aff_short_key=UneMJZf&dl_target_url={link}&aff_fcid={TRACKING_ID}"
-            items.append({
+    products = []
+    for item in items:
+        title = item.get("title") or item.text.strip()
+        link = item.get("href")
+        if not link.startswith("http"):
+            link = "https:" + link
+        image_tag = item.find("img")
+        image = image_tag.get("src") if image_tag else None
+        if title and link and image:
+            affiliate_link = f"{link}?aff_fcid={AFFILIATE_NAME}"
+            products.append({
                 "title": title,
-                "image": image,
-                "price": price,
                 "link": affiliate_link,
-                "category": "default"
+                "image": image,
+                "text": random.choice(TEXT_BANK["default"])
             })
-        except:
-            continue
-    return items
+        if len(products) >= 10:
+            break
+    return products
 
-# שליחת 3 מוצרים אקראיים
-def send_trending():
+def send_products():
+    print("שליחת מוצרים...")
     try:
         products = get_trending_products()
-        selected = random.sample(products, min(3, len(products)))
+        selected = random.sample(products, PRODUCTS_PER_BATCH)
         for product in selected:
-            send_product(product["title"], product["image"], product["price"], product["link"], product["category"])
-            time.sleep(2)
+            bot.send_photo(
+                chat_id=CHAT_ID,
+                photo=product["image"],
+                caption=f"{product['text']}\n{product['link']}"
+            )
+            time.sleep(3)
     except Exception as e:
         print("שגיאה בשליחה:", e)
 
-# הגדרת זמני שליחה
-schedule.every().day.at("09:00").do(send_trending)
-schedule.every().day.at("13:00").do(send_trending)
-schedule.every().day.at("18:00").do(send_trending)
+# שליחה אוטומטית 3 פעמים ביום
+schedule.every().day.at("08:30").do(send_products)
+schedule.every().day.at("13:00").do(send_products)
+schedule.every().day.at("20:00").do(send_products)
 
 # ריצה מתמשכת
-if __name__ == "__main__":
-    print("הבוט פעיל וישלח מוצרים כל יום 3 פעמים...")
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
+while True:
+    schedule.run_pending()
+    time.sleep(30)
