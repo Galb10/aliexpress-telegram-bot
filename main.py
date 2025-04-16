@@ -2,7 +2,7 @@ import requests
 
 token = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 chat_id = "-1002644464460"
-text = "בדיקת חיבור – אם אתה רואה את זה, הבוט עובד!"
+#text = "בדיקת חיבור – אם אתה רואה את זה, הבוט עובד!"
 
 url = f"https://api.telegram.org/bot{token}/sendMessage"
 payload = {
