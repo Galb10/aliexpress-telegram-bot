@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pytz import timezone
 
-# פרטי טלגרם ו-Admitad שלך
+# פרטי טלגרם ו-Admitad
 BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 CHAT_ID = "-1002644464460"
 ADMITAD_PREFIX = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp="
@@ -30,52 +30,55 @@ def generate_message(product):
     image = product['image']
     link = ADMITAD_PREFIX + requests.utils.quote(url)
 
+    text = ""
     if any(x in title.lower() for x in ["shirt", "חולצה", "t-shirt", "טישרט"]):
-        return f"""<b>👕 חולצה בסטייל שלא תישאר הרבה במלאי!</b>
+        text = f"""👕 *חולצה בסטייל שלא תישאר הרבה במלאי!*
 
 {title}
 
-היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט – זאת שלך.
+היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט, זאת שלך.
 
-<a href="{link}">לצפייה במוצר</a>"""
+[צפה במוצר]({link})"""
     elif any(x in title.lower() for x in ["light", "lamp", "מנורה", "led", "לד"]):
-        return f"""<b>💡 תאורה שתשנה את האווירה בבית!</b>
+        text = f"""💡 *תאורה שתשנה את האווירה בבית!*
 
 {title}
 
-עיצוב נקי, מראה מודרני, ואור שנותן תחושה יוקרתית.
+פשוט, אלגנטי, ועושה חשק לעצב מחדש. תתכונן למחמאות.
 
-<a href="{link}">לפרטים נוספים</a>"""
+[לפרטים נוספים]({link})"""
     elif any(x in title.lower() for x in ["bag", "תיק", "backpack"]):
-        return f"""<b>🎒 תיק פרקטי ויפה – השילוב המנצח!</b>
+        text = f"""🎒 *תיק פרקטי ויפה – השילוב המנצח!*
 
 {title}
 
-גם נוח, גם איכותי, וגם נראה מיליון דולר. מושלם ליום-יום.
+גם נוח, גם איכותי, וגם נראה מיליון דולר. מתאים לכל יציאה.
 
-<a href="{link}">למוצר המלא</a>"""
-    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל", "charger"]):
-        return f"""<b>🔌 גאדג'ט שיפתור לך בעיה יומיומית!</b>
+[לצפייה במוצר]({link})"""
+    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל"]):
+        text = f"""🔌 *גאדג'ט שיפתור לך בעיה יומיומית!*
 
 {title}
 
-מינימלי, חכם, ועם פתרון שמקל עליך ביום יום.
+מינימלי, חכם, בדיוק מה שאתה לא ידעת שאתה צריך.
 
-<a href="{link}">בדוק את המוצר</a>"""
+[למוצר המלא]({link})"""
     else:
-        return f"""<b>✨ מציאה מפתיעה מאלי אקספרס!</b>
+        text = f"""✨ *מציאה ששווה בדיקה!*
 
 {title}
 
-תוספת מושלמת לבית או ליומיום – במחיר שלא תמצא בארץ.
+לא בטוח איך חיית בלעדיה עד עכשיו. עכשיו זה הזמן לנסות.
 
-<a href="{link}">הצצה למוצר</a>"""
+[בדוק את המוצר]({link})"""
+    return text
 
 def fetch_products():
+    print("מתחבר לעליאקספרס...")
     url = "https://bestsellers.aliexpress.com"
     r = requests.get(url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
-    items = soup.select(".item")[:20]
+    items = soup.select(".item")[:15]
     products = []
     for item in items:
         a = item.find("a", href=True)
@@ -88,6 +91,7 @@ def fetch_products():
         title = img.get("alt", "מוצר מעלי אקספרס")
         image = img["src"]
         products.append({"title": title.strip(), "url": link.strip(), "image": image.strip()})
+    print(f"נמצאו {len(products)} מוצרים")
     return products
 
 def send(product):
@@ -96,40 +100,16 @@ def send(product):
         "chat_id": CHAT_ID,
         "photo": product["image"],
         "caption": msg,
-        "parse_mode": "HTML"
+        "parse_mode": "Markdown"
     }
     response = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=payload)
-    if response.status_code == 200:
-        save_sent(product["url"])
-    else:
-        print("שגיאה בשליחה:", response.text)
+    print("שליחה:", response.status_code)
+    save_sent(product["url"])
 
 def send_batch():
     print("שולח מוצרים...")
     sent = load_sent()
     products = fetch_products()
-    random.shuffle(products)
-    count = 0
-    for p in products:
-        if p["url"] not in sent and p["image"]:
-            send(p)
-            count += 1
-            time.sleep(5)
-        if count >= 4:
-            break
-
-# תזמון והרצה ראשונית
-scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
-scheduler.add_job(send_batch, "cron", hour="9,14,20")
-send_batch()
-scheduler.start()
-
-def send_batch():
-    print("התחלנו את הפונקציה send_batch")
-    sent = load_sent()
-    products = fetch_products()
-    print(f"נמצאו {len(products)} מוצרים")
-
     random.shuffle(products)
     count = 0
     for p in products:
@@ -140,3 +120,9 @@ def send_batch():
             time.sleep(5)
         if count >= 4:
             break
+    print("סיום שליחה.")
+
+scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
+scheduler.add_job(send_batch, "cron", hour="9,14,20")
+send_batch()
+scheduler.start()
