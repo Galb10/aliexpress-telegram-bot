@@ -2,4 +2,3 @@ requests
 beautifulsoup4
 apscheduler
 pytz
-python-telegram-bot==13.15
