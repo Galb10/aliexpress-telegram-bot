@@ -123,3 +123,20 @@ scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
 scheduler.add_job(send_batch, "cron", hour="9,14,20")
 send_batch()
 scheduler.start()
+
+def send_batch():
+    print("התחלנו את הפונקציה send_batch")
+    sent = load_sent()
+    products = fetch_products()
+    print(f"נמצאו {len(products)} מוצרים")
+
+    random.shuffle(products)
+    count = 0
+    for p in products:
+        if p["url"] not in sent and p["image"]:
+            print("שולח מוצר:", p["title"])
+            send(p)
+            count += 1
+            time.sleep(5)
+        if count >= 4:
+            break
