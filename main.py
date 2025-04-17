@@ -1,128 +1,155 @@
 import requests
+from bs4 import BeautifulSoup
+from apscheduler.schedulers.background import BackgroundScheduler
+from pytz import timezone
+from telegram import Bot
+from urllib.parse import quote
 import time
 import random
 import os
-from bs4 import BeautifulSoup
-from apscheduler.schedulers.blocking import BlockingScheduler
-from pytz import timezone
 
-# פרטי טלגרם ו-Admitad
+# הגדרות
 BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 CHAT_ID = "-1002644464460"
-ADMITAD_PREFIX = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp="
+ADMITAD_BASE = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/"
+SENT_FILE = "sent_products.txt"
 
-sent_file = "sent_products.txt"
-headers = {"User-Agent": "Mozilla/5.0"}
+bot = Bot(token=BOT_TOKEN)
+scheduler = BackgroundScheduler(timezone=timezone("Asia/Jerusalem"))
 
-def load_sent():
-    if not os.path.exists(sent_file):
+# טעינת מוצרים שנשלחו
+def load_sent_products():
+    if not os.path.exists(SENT_FILE):
         return set()
-    with open(sent_file, "r") as f:
-        return set(f.read().splitlines())
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f.readlines())
 
-def save_sent(url):
-    with open(sent_file, "a") as f:
-        f.write(url + "\n")
+# שמירת מוצר שנשלח
+def save_sent_product(product_id):
+    with open(SENT_FILE, "a", encoding="utf-8") as f:
+        f.write(product_id + "\n")
 
-def generate_message(product):
-    title = product['title']
-    url = product['url']
-    image = product['image']
-    link = ADMITAD_PREFIX + requests.utils.quote(url)
+# יצירת קישור אפילייאט תקני
+def generate_affiliate_link(url):
+    encoded = quote(url, safe='')
+    return f"{ADMITAD_BASE}?ulp={encoded}"
 
-    text = ""
-    if any(x in title.lower() for x in ["shirt", "חולצה", "t-shirt", "טישרט"]):
-        text = f"""👕 *חולצה בסטייל שלא תישאר הרבה במלאי!*
+# ניסוח הודעה שיווקית מותאמת
+def generate_rich_text(title, price, link):
+    emojis = ["🔥", "✅", "🛒", "💡", "✨", "📦", "❤️", "⚡", "🚀", "⭐"]
+    intro = random.choice([
+        "תעצור הכל – זה משהו שאתה פשוט חייב להכיר",
+        "מצאתי לך את המוצר שכולם מדברים עליו",
+        "כזה דבר לא רואים כל יום – ויש סיבה לזה",
+        "הדבר הקטן הזה? הולך לשדרג לך את היום",
+        "אם אתה אוהב דברים חכמים ושימושיים – זה בדיוק בשבילך"
+    ])
+    detail = random.choice([
+        "מלא בסטייל, שימושי בטירוף, והכי חשוב – במחיר שבא לפנק",
+        "נראה טוב, עובד מעולה, וכל מי שניסה פשוט עף",
+        "רמה גבוהה, מחיר נמוך – מה צריך יותר?",
+        "זה פשוט עובד. בלי שטויות. בלי חרטות.",
+        "כל מי שקנה – חזר לעוד אחד"
+    ])
+    cta = random.choice([
+        "הקישור פה למטה – תלחץ ותגלה",
+        "זה הולך להיגמר – תפס לפני כולם",
+        "קח הצצה – תבין לבד למה כולם עפים על זה",
+        "אני כבר בפנים. אתה?",
+        "הזדמנות כזו לא חוזרת פעמיים"
+    ])
+    lines = [
+        f"{random.choice(emojis)} {intro}",
+        f"{random.choice(emojis)} {title}",
+        f"{random.choice(emojis)} {detail}"
+    ]
+    if price:
+        lines.append(f"{random.choice(emojis)} מחיר: {price}")
+    lines.append(f"{random.choice(emojis)} <a href='{link}'>לצפייה במוצר</a>")
+    lines.append(f"{random.choice(emojis)} {cta}")
+    return "\n".join(lines)
 
-{title}
+# שליפת מחיר
+def get_price(url):
+    try:
+        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(res.text, "html.parser")
+        tag = soup.select_one("meta[property='product:price:amount']")
+        return f"{tag['content']} ₪" if tag else None
+    except:
+        return None
 
-היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט, זאת שלך.
+# שליפת תמונה
+def get_image(url):
+    try:
+        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(res.text, "html.parser")
+        tag = soup.find("meta", property="og:image")
+        return tag["content"] if tag else None
+    except:
+        return None
 
-[צפה במוצר]({link})"""
-    elif any(x in title.lower() for x in ["light", "lamp", "מנורה", "led", "לד"]):
-        text = f"""💡 *תאורה שתשנה את האווירה בבית!*
-
-{title}
-
-פשוט, אלגנטי, ועושה חשק לעצב מחדש. תתכונן למחמאות.
-
-[לפרטים נוספים]({link})"""
-    elif any(x in title.lower() for x in ["bag", "תיק", "backpack"]):
-        text = f"""🎒 *תיק פרקטי ויפה – השילוב המנצח!*
-
-{title}
-
-גם נוח, גם איכותי, וגם נראה מיליון דולר. מתאים לכל יציאה.
-
-[לצפייה במוצר]({link})"""
-    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל"]):
-        text = f"""🔌 *גאדג'ט שיפתור לך בעיה יומיומית!*
-
-{title}
-
-מינימלי, חכם, בדיוק מה שאתה לא ידעת שאתה צריך.
-
-[למוצר המלא]({link})"""
-    else:
-        text = f"""✨ *מציאה ששווה בדיקה!*
-
-{title}
-
-לא בטוח איך חיית בלעדיה עד עכשיו. עכשיו זה הזמן לנסות.
-
-[בדוק את המוצר]({link})"""
-    return text
-
-def fetch_products():
-    print("מתחבר לעליאקספרס...")
-    url = "https://bestsellers.aliexpress.com"
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
-    items = soup.select(".item")[:15]
+# שליפת מוצרים טרנדיים
+def get_trending_products(limit=4):
+    sent = load_sent_products()
+    url = "https://www.aliexpress.com/w/wholesale-trending.html"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers)
+    soup = BeautifulSoup(res.text, "html.parser")
+    links = soup.select("a[href*='/item/']")
     products = []
-    for item in items:
-        a = item.find("a", href=True)
-        img = item.find("img", src=True)
-        if not a or not img:
+
+    for link in links:
+        href = link.get("href")
+        if not href.startswith("http"):
+            href = "https:" + href
+        title = link.get("title") or link.text.strip()
+        if not title:
             continue
-        link = a["href"]
-        if not link.startswith("http"):
+        product_id = (title.strip() + href.strip())[:150]
+        if product_id in sent:
             continue
-        title = img.get("alt", "מוצר מעלי אקספרס")
-        image = img["src"]
-        products.append({"title": title.strip(), "url": link.strip(), "image": image.strip()})
-    print(f"נמצאו {len(products)} מוצרים")
+        image = get_image(href)
+        if not image:
+            continue
+        price = get_price(href)
+        products.append({
+            "id": product_id,
+            "title": title[:100],
+            "url": href,
+            "price": price,
+            "image": image
+        })
+        if len(products) >= limit:
+            break
     return products
 
-def send(product):
-    msg = generate_message(product)
-    payload = {
-        "chat_id": CHAT_ID,
-        "photo": product["image"],
-        "caption": msg,
-        "parse_mode": "Markdown"
-    }
-    response = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=payload)
-    print("שליחה:", response.status_code)
-    save_sent(product["url"])
+# שליחת מוצר
+def send_product(product):
+    link = generate_affiliate_link(product["url"])
+    caption = generate_rich_text(product["title"], product["price"], link)
+    try:
+        bot.send_photo(chat_id=CHAT_ID, photo=product["image"], caption=caption, parse_mode="HTML")
+        save_sent_product(product["id"])
+    except Exception as e:
+        print("שגיאה בשליחה:", e)
 
-def send_batch():
+# שליחת סדרת מוצרים
+def send_products():
     print("שולח מוצרים...")
-    sent = load_sent()
-    products = fetch_products()
-    random.shuffle(products)
-    count = 0
-    for p in products:
-        if p["url"] not in sent and p["image"]:
-            print("שולח מוצר:", p["title"])
-            send(p)
-            count += 1
-            time.sleep(5)
-        if count >= 4:
-            break
-    print("סיום שליחה.")
+    products = get_trending_products()
+    for product in products:
+        send_product(product)
+        time.sleep(3)
 
-scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
-scheduler.add_job(send_batch, "cron", hour="9,14,20")
-send_batch()
+# תזמון אוטומטי
+scheduler.add_job(send_products, 'cron', hour=9)
+scheduler.add_job(send_products, 'cron', hour=14)
+scheduler.add_job(send_products, 'cron', hour=20)
 scheduler.start()
+
+# שליחה מיידית לבדיקה
+send_products()
+
+while True:
+    time.sleep(60)
