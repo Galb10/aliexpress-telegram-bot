@@ -2,100 +2,119 @@ import requests
 import time
 import random
 import os
-from datetime import datetime
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pytz import timezone
 
-# פרטים שלך
+# פרטי טלגרם ו-Admitad שלך
 BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
 CHAT_ID = "-1002644464460"
-ADMITAD_LINK_PREFIX = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp="
+ADMITAD_PREFIX = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp="
 
-sent_products_file = "sent_products.txt"
+sent_file = "sent_products.txt"
+headers = {"User-Agent": "Mozilla/5.0"}
 
-def fetch_trending_products():
-    url = "https://best.aliexpress.com/"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
+def load_sent():
+    if not os.path.exists(sent_file):
+        return set()
+    with open(sent_file, "r") as f:
+        return set(f.read().splitlines())
 
-    items = soup.select("a[href*='item']")[:10]
+def save_sent(url):
+    with open(sent_file, "a") as f:
+        f.write(url + "\n")
+
+def generate_message(product):
+    title = product['title']
+    url = product['url']
+    image = product['image']
+    link = ADMITAD_PREFIX + requests.utils.quote(url)
+
+    text = ""
+    if any(x in title.lower() for x in ["shirt", "חולצה", "t-shirt", "טישרט"]):
+        text = f"""👕 *חולצה בסטייל שלא תישאר הרבה במלאי!*
+
+{title}
+
+היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט, זאת שלך.
+
+[צפה במוצר]({link})"""
+    elif any(x in title.lower() for x in ["light", "lamp", "מנורה", "led", "לד"]):
+        text = f"""💡 *תאורה שתשנה את האווירה בבית!*
+
+{title}
+
+פשוט, אלגנטי, ועושה חשק לעצב מחדש. תתכונן למחמאות.
+
+[לפרטים נוספים]({link})"""
+    elif any(x in title.lower() for x in ["bag", "תיק", "backpack"]):
+        text = f"""🎒 *תיק פרקטי ויפה – השילוב המנצח!*
+
+{title}
+
+גם נוח, גם איכותי, וגם נראה מיליון דולר. מתאים לכל יציאה.
+
+[לצפייה במוצר]({link})"""
+    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל"]):
+        text = f"""🔌 *גאדג'ט שיפתור לך בעיה יומיומית!*
+
+{title}
+
+מינימלי, חכם, בדיוק מה שאתה לא ידעת שאתה צריך.
+
+[למוצר המלא]({link})"""
+    else:
+        text = f"""✨ *מציאה ששווה בדיקה!*
+
+{title}
+
+לא בטוח איך חיית בלעדיה עד עכשיו. עכשיו זה הזמן לנסות.
+
+[בדוק את המוצר]({link})"""
+    return text
+
+def fetch_products():
+    url = "https://bestsellers.aliexpress.com"
+    r = requests.get(url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
+    items = soup.select(".item")[:15]
     products = []
-
     for item in items:
-        link = item.get("href")
-        title = item.get("title") or item.text.strip()
-        if not link or not title:
+        a = item.find("a", href=True)
+        img = item.find("img", src=True)
+        if not a or not img:
             continue
-        full_link = link if link.startswith("http") else f"https:{link}"
-        image = item.find("img")
-        img_url = image["src"] if image and "src" in image.attrs else None
-        products.append({
-            "title": title,
-            "url": full_link,
-            "img": img_url
-        })
-
+        link = a["href"]
+        if not link.startswith("http"):
+            continue
+        title = img.get("alt", "מוצר מעלי אקספרס")
+        image = img["src"]
+        products.append({"title": title.strip(), "url": link.strip(), "image": image.strip()})
     return products
 
-def make_affiliate_link(original_url):
-    return ADMITAD_LINK_PREFIX + requests.utils.quote(original_url, safe="")
-
-def generate_message(product, price="לא זמין"):
-    message = f"""**{product['title']}**
-
-למה לא הכרנו קודם?
-המוצר הזה הולך להפוך לך את היום. נוח, פרקטי, ונראה אש.
-
-מחיר: {price}
-[לצפייה במוצר]({make_affiliate_link(product['url'])})"""
-    return message
-
-def load_sent_products():
-    if not os.path.exists(sent_products_file):
-        return set()
-    with open(sent_products_file, "r") as file:
-        return set(file.read().splitlines())
-
-def save_sent_product(url):
-    with open(sent_products_file, "a") as file:
-        file.write(url + "\n")
-
-def send_product_to_telegram(product):
-    if product["url"] in load_sent_products():
-        return False
-
-    affiliate_url = make_affiliate_link(product["url"])
-    price = "לא זמין"
-    message = generate_message(product, price)
-
-    data = {
+def send(product):
+    msg = generate_message(product)
+    payload = {
         "chat_id": CHAT_ID,
-        "caption": message,
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": False
+        "photo": product["image"],
+        "caption": msg,
+        "parse_mode": "Markdown"
     }
-
-    if product.get("img"):
-        data["photo"] = product["img"]
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=data)
-    else:
-        data["text"] = message
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data)
-
-    save_sent_product(product["url"])
-    return True
+    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=payload)
+    save_sent(product["url"])
 
 def send_batch():
     print("שולח מוצרים...")
-    products = fetch_trending_products()
+    sent = load_sent()
+    products = fetch_products()
     random.shuffle(products)
     count = 0
-    for product in products:
-        if send_product_to_telegram(product):
+    for p in products:
+        if p["url"] not in sent and p["image"]:
+            send(p)
             count += 1
-        if count >= 5:
+            time.sleep(5)
+        if count >= 4:
             break
 
 scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
