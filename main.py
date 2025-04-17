@@ -7,9 +7,10 @@ from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pytz import timezone
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-ADMITAD_LINK_PREFIX = os.getenv("ADMITAD_LINK_PREFIX", "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp=")
+# פרטים שלך
+BOT_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
+CHAT_ID = "-1002644464460"
+ADMITAD_LINK_PREFIX = "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp="
 
 sent_products_file = "sent_products.txt"
 
@@ -43,14 +44,12 @@ def make_affiliate_link(original_url):
 
 def generate_message(product, price="לא זמין"):
     message = f"""**{product['title']}**
-    
-הנה משהו שבאמת תצטער שלא היה לך קודם!
-המוצר הזה פשוט חובה - בדיוק מסוג הדברים שאתה לא מבין איך הסתדרת בלעדיהם.
-מתאים בול לסגנון שלך, גם פרקטי וגם נראה פגז.
+
+למה לא הכרנו קודם?
+המוצר הזה הולך להפוך לך את היום. נוח, פרקטי, ונראה אש.
 
 מחיר: {price}
-[למוצר המלא]({make_affiliate_link(product['url'])})
-"""
+[לצפייה במוצר]({make_affiliate_link(product['url'])})"""
     return message
 
 def load_sent_products():
