@@ -1,80 +1,105 @@
 import requests
-import random
 import time
-from apscheduler.schedulers.background import BackgroundScheduler
+import random
+import os
+from datetime import datetime
 from bs4 import BeautifulSoup
-from telegram import Bot
+from apscheduler.schedulers.blocking import BlockingScheduler
+from pytz import timezone
 
-# פרטי הבוט והקבוצה
-TELEGRAM_TOKEN = "7375577655:AAE9NBUIn3pNrxkPChS5V2nWA0Fs6bnkeNA"
-CHAT_ID = "-1002644464460"
-bot = Bot(token=TELEGRAM_TOKEN)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+ADMITAD_LINK_PREFIX = os.getenv("ADMITAD_LINK_PREFIX", "https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp=")
 
-sent_products = set()
-
-EMOJIS = ["🔥", "✨", "⚡", "🛒", "✅", "🧠", "💥"]
-OPENERS = [
-    "למה לא היה לי את זה קודם", "איפה זה היה כל החיים שלי", "מוצר שאי אפשר לעמוד בפניו",
-    "תראו איזה טירוף", "לא תאמינו שקיים דבר כזה", "מושלם!", "זה פשוט מבריק"
-]
+sent_products_file = "sent_products.txt"
 
 def fetch_trending_products():
-    url = "https://bestsellers.aliexpress.com"
-    response = requests.get(url)
+    url = "https://best.aliexpress.com/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
+
+    items = soup.select("a[href*='item']")[:10]
     products = []
-    for item in soup.select(".item")[:10]:
-        link = item.find("a")["href"]
-        title = item.select_one(".title").get_text(strip=True)
-        image = item.find("img")["src"]
-        if link not in sent_products and image and title:
-            products.append({
-                "title": title,
-                "url": link,
-                "image": image
-            })
+
+    for item in items:
+        link = item.get("href")
+        title = item.get("title") or item.text.strip()
+        if not link or not title:
+            continue
+        full_link = link if link.startswith("http") else f"https:{link}"
+        image = item.find("img")
+        img_url = image["src"] if image and "src" in image.attrs else None
+        products.append({
+            "title": title,
+            "url": full_link,
+            "img": img_url
+        })
+
     return products
 
-def generate_affiliate_link(original_url):
-    encoded = requests.utils.quote(original_url, safe='')
-    return f"https://rzekl.com/g/1e8d11449475164bd74316525dc3e8/?ulp={encoded}"
+def make_affiliate_link(original_url):
+    return ADMITAD_LINK_PREFIX + requests.utils.quote(original_url, safe="")
 
-def create_marketing_message(product):
-    opener = random.choice(OPENERS)
-    emoji = random.choice(EMOJIS)
-    title = product["title"]
-    return f"""{emoji} *{opener}* {emoji}
+def generate_message(product, price="לא זמין"):
+    message = f"""**{product['title']}**
+    
+הנה משהו שבאמת תצטער שלא היה לך קודם!
+המוצר הזה פשוט חובה - בדיוק מסוג הדברים שאתה לא מבין איך הסתדרת בלעדיהם.
+מתאים בול לסגנון שלך, גם פרקטי וגם נראה פגז.
 
-{title}
+מחיר: {price}
+[למוצר המלא]({make_affiliate_link(product['url'])})
+"""
+    return message
 
-[צפו במוצר עכשיו]({generate_affiliate_link(product["url"])})"""
+def load_sent_products():
+    if not os.path.exists(sent_products_file):
+        return set()
+    with open(sent_products_file, "r") as file:
+        return set(file.read().splitlines())
+
+def save_sent_product(url):
+    with open(sent_products_file, "a") as file:
+        file.write(url + "\n")
 
 def send_product_to_telegram(product):
-    try:
-        message = create_marketing_message(product)
-        bot.send_photo(
-            chat_id=CHAT_ID,
-            photo=product["image"],
-            caption=message,
-            parse_mode="Markdown"
-        )
-        sent_products.add(product["url"])
-        print("נשלח:", product["title"])
-    except Exception as e:
-        print("שגיאה:", e)
+    if product["url"] in load_sent_products():
+        return False
 
-def daily_task():
+    affiliate_url = make_affiliate_link(product["url"])
+    price = "לא זמין"
+    message = generate_message(product, price)
+
+    data = {
+        "chat_id": CHAT_ID,
+        "caption": message,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": False
+    }
+
+    if product.get("img"):
+        data["photo"] = product["img"]
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=data)
+    else:
+        data["text"] = message
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data)
+
+    save_sent_product(product["url"])
+    return True
+
+def send_batch():
     print("שולח מוצרים...")
     products = fetch_trending_products()
-    selected = random.sample(products, min(4, len(products)))
-    for product in selected:
-        send_product_to_telegram(product)
+    random.shuffle(products)
+    count = 0
+    for product in products:
+        if send_product_to_telegram(product):
+            count += 1
+        if count >= 5:
+            break
 
-scheduler = BackgroundScheduler(timezone="Asia/Jerusalem")
-scheduler.add_job(daily_task, "cron", hour=9)
-scheduler.add_job(daily_task, "cron", hour=14)
-scheduler.add_job(daily_task, "cron", hour=20)
+scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
+scheduler.add_job(send_batch, "cron", hour="9,14,20")
+send_batch()
 scheduler.start()
-
-while True:
-    time.sleep(60)
