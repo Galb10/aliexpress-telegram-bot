@@ -30,54 +30,52 @@ def generate_message(product):
     image = product['image']
     link = ADMITAD_PREFIX + requests.utils.quote(url)
 
-    text = ""
     if any(x in title.lower() for x in ["shirt", "חולצה", "t-shirt", "טישרט"]):
-        text = f"""👕 *חולצה בסטייל שלא תישאר הרבה במלאי!*
+        return f"""<b>👕 חולצה בסטייל שלא תישאר הרבה במלאי!</b>
 
 {title}
 
-היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט, זאת שלך.
+היא מושלמת לקיץ – קלילה, נוחה ומלאת נוכחות. אם אתה בקטע של לבלוט – זאת שלך.
 
-[צפה במוצר]({link})"""
+<a href="{link}">לצפייה במוצר</a>"""
     elif any(x in title.lower() for x in ["light", "lamp", "מנורה", "led", "לד"]):
-        text = f"""💡 *תאורה שתשנה את האווירה בבית!*
+        return f"""<b>💡 תאורה שתשנה את האווירה בבית!</b>
 
 {title}
 
-פשוט, אלגנטי, ועושה חשק לעצב מחדש. תתכונן למחמאות.
+עיצוב נקי, מראה מודרני, ואור שנותן תחושה יוקרתית.
 
-[לפרטים נוספים]({link})"""
+<a href="{link}">לפרטים נוספים</a>"""
     elif any(x in title.lower() for x in ["bag", "תיק", "backpack"]):
-        text = f"""🎒 *תיק פרקטי ויפה – השילוב המנצח!*
+        return f"""<b>🎒 תיק פרקטי ויפה – השילוב המנצח!</b>
 
 {title}
 
-גם נוח, גם איכותי, וגם נראה מיליון דולר. מתאים לכל יציאה.
+גם נוח, גם איכותי, וגם נראה מיליון דולר. מושלם ליום-יום.
 
-[לצפייה במוצר]({link})"""
-    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל"]):
-        text = f"""🔌 *גאדג'ט שיפתור לך בעיה יומיומית!*
+<a href="{link}">למוצר המלא</a>"""
+    elif any(x in title.lower() for x in ["usb", "גאדג'", "מטען", "כבל", "charger"]):
+        return f"""<b>🔌 גאדג'ט שיפתור לך בעיה יומיומית!</b>
 
 {title}
 
-מינימלי, חכם, בדיוק מה שאתה לא ידעת שאתה צריך.
+מינימלי, חכם, ועם פתרון שמקל עליך ביום יום.
 
-[למוצר המלא]({link})"""
+<a href="{link}">בדוק את המוצר</a>"""
     else:
-        text = f"""✨ *מציאה ששווה בדיקה!*
+        return f"""<b>✨ מציאה מפתיעה מאלי אקספרס!</b>
 
 {title}
 
-לא בטוח איך חיית בלעדיה עד עכשיו. עכשיו זה הזמן לנסות.
+תוספת מושלמת לבית או ליומיום – במחיר שלא תמצא בארץ.
 
-[בדוק את המוצר]({link})"""
-    return text
+<a href="{link}">הצצה למוצר</a>"""
 
 def fetch_products():
     url = "https://bestsellers.aliexpress.com"
     r = requests.get(url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
-    items = soup.select(".item")[:15]
+    items = soup.select(".item")[:20]
     products = []
     for item in items:
         a = item.find("a", href=True)
@@ -98,10 +96,13 @@ def send(product):
         "chat_id": CHAT_ID,
         "photo": product["image"],
         "caption": msg,
-        "parse_mode": "Markdown"
+        "parse_mode": "HTML"
     }
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=payload)
-    save_sent(product["url"])
+    response = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data=payload)
+    if response.status_code == 200:
+        save_sent(product["url"])
+    else:
+        print("שגיאה בשליחה:", response.text)
 
 def send_batch():
     print("שולח מוצרים...")
@@ -117,6 +118,7 @@ def send_batch():
         if count >= 4:
             break
 
+# תזמון והרצה ראשונית
 scheduler = BlockingScheduler(timezone=timezone("Asia/Jerusalem"))
 scheduler.add_job(send_batch, "cron", hour="9,14,20")
 send_batch()
