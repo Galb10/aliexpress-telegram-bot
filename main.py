@@ -34,7 +34,7 @@ def generate_affiliate_link(url):
     encoded = quote(url, safe='')
     return f"{ADMITAD_BASE}?ulp={encoded}"
 
-# ניסוח הודעה שיווקית מותאמת
+# ניסוח הודעה שיווקית מותאמת עם טיפ לאפליקציה
 def generate_rich_text(title, price, link):
     emojis = ["🔥", "✅", "🛒", "💡", "✨", "📦", "❤️", "⚡", "🚀", "⭐"]
     intro = random.choice([
@@ -58,6 +58,15 @@ def generate_rich_text(title, price, link):
         "אני כבר בפנים. אתה?",
         "הזדמנות כזו לא חוזרת פעמיים"
     ])
+    tips = [
+        "🧠 טיפ: הכי נוח להזמין דרך האפליקציה – תפתח את הקישור דרך AliExpress",
+        "📱 שים לב: עדיף לפתוח את הקישור מהאפליקציה כדי לראות מחיר טוב יותר",
+        "⚡ פתחת את הקישור בדפדפן? נסה דרך אפליקציית AliExpress – הרבה יותר נוח",
+        "🚀 רוצים משלוח מהיר? האפליקציה לפעמים מציגה אפשרויות טובות יותר",
+        "🛍️ לפעמים המחיר באפליקציה נמוך יותר – שווה לנסות משם"
+    ]
+    tip = random.choice(tips)
+
     lines = [
         f"{random.choice(emojis)} {intro}",
         f"{random.choice(emojis)} {title}",
@@ -67,6 +76,7 @@ def generate_rich_text(title, price, link):
         lines.append(f"{random.choice(emojis)} מחיר: {price}")
     lines.append(f"{random.choice(emojis)} <a href='{link}'>לצפייה במוצר</a>")
     lines.append(f"{random.choice(emojis)} {cta}")
+    lines.append(tip)
     return "\n".join(lines)
 
 # שליפת מחיר
